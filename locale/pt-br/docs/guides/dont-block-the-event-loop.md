@@ -1,84 +1,85 @@
 ---
-title: Don't Block the Event Loop (or the Worker Pool)
+title: Não bloqueie o Event Loop (ou o Worker Pool)
 layout: docs.hbs
 ---
 
-# Don't Block the Event Loop (or the Worker Pool)
+# Não bloqueie o Event Loop (ou o Worker Pool)
 
-## Should you read this guide?
-If you're writing anything more complicated than a brief command-line script, reading this should help you write higher-performance, more-secure applications.
+## Você deve ler esse guia?
+Se você está escrevendo algo mais complicado que um breve script de linha de comando, ler este guia ajudará você a escrever aplicativos de maior desempenho e mais seguros.
 
-This document is written with Node servers in mind, but the concepts apply to complex Node applications as well.
-Where OS-specific details vary, this document is Linux-centric.
+Este documento foi escrito com servidores Node em mente, mas os conceitos são aplicados para aplicações Node complexas também.
+Onde detalhes específicos do sistema operacional variam, este documento é centrado no Linux.
 
-## Summary
-Node.js runs JavaScript code in the Event Loop (initialization and callbacks), and offers a Worker Pool to handle expensive tasks like file I/O.
-Node scales well, sometimes better than more heavyweight approaches like Apache.
-The secret to Node's scalability is that it uses a small number of threads to handle many clients.
-If Node can make do with fewer threads, then it can spend more of your system's time and memory working on clients rather than on paying space and time overheads for threads (memory, context-switching).
-But because Node has only a few threads, you must structure your application to use them wisely.
+## Resumo
+O Node.js executa código JavaScript no Event Loop (inicialização e callbacks), e oferece um Worker Pool para manipular tarefas custusas como I/O de arquivo.
+Node escala bem, as vezes mais do que abordagens pesadas como Apache.
+O segredo da escalabilidade do Node é que ele usa um pequeno número de threads para manipular muitos clientes.
+Se o Node pode trabalhar com menos threads, ele poderá gastar mais tempo do seu sistema e memória trabalhando nos clientes em vez de disperdiçar recursos de espaço e tempo para as threads (memória e mudança de contexto).
+Mas pelo fato do Node ter poucas threads, você precisa estruturar sua aplicação para usá-las com sabadoria.  
 
-Here's a good rule of thumb for keeping your Node server speedy:
-*Node is fast when the work associated with each client at any given time is "small"*.
+Aqui está um princípio básico para manter o servidor Node rápido: *Node é rápido quando o trabalho associado a cada cliente em um determinado momento é "pequeno"*.
 
-This applies to callbacks on the Event Loop and tasks on the Worker Pool.
+Isso se aplica a callbacks no Event Loop e tarefas no Worker Pool.
 
-## Why should I avoid blocking the Event Loop and the Worker Pool?
-Node uses a small number of threads to handle many clients.
-In Node there are two types of threads: one Event Loop (aka the main loop, main thread, event thread, etc.), and a pool of `k` Workers in a Worker Pool (aka the threadpool).
+## Por que eu devo evitar bloquear o Event Loop e o Worker Pool?
+O Node usa um pequeno número de threads para manipular muitos clientes.
+No Node existem dois tipos de threads: um Event Loop (também conhecido como main loop, main thread, event thread, etc.), e uma pool de `k` Workers em um Worker Pool (também conhecido como threadpool)
 
-If a thread is taking a long time to execute a callback (Event Loop) or a task (Worker), we call it "blocked".
-While a thread is blocked working on behalf of one client, it cannot handle requests from any other clients.
-This provides two motivations for blocking neither the Event Loop nor the Worker Pool:
+Se uma thread está levando muito tempo para excutar um callback (Event Loop) ou uma tarefa (Worker), nós a chamamos de "bloqueada".
+Enquanto uma thread está bloqueada trabalhando para um cliente, ela não pode lidar com requisições de outros clientes.  
+Isso fornece duas motivações para não bloquear o Event Loop nem o Worker Pool:
 
-1. Performance: If you regularly perform heavyweight activity on either type of thread, the *throughput* (requests/second) of your server will suffer.
-2. Security: If it is possible that for certain input one of your threads might block, a malicious client could submit this "evil input", make your threads block, and keep them from working on other clients. This would be a [Denial of Service](https://en.wikipedia.org/wiki/Denial-of-service_attack) attack.
+1. Performance: Se você executar regularmente atividades pesadas em qualquer tipo de thread, o *throughput* (requisições por segundo) do seu servidor sofrerá.
+2. Segurança: Se for possível que para determinadas entradas uma de suas threads possam bloquear, um cliente malicioso pode enviar essa "entrada incorreta", para fazer suas threads bloquearem, e mantê-las trabalhando para outros clientes. Isso seria um ataque de [Negação de Serviço](https://en.wikipedia.org/wiki/Denial-of-service_attack)
 
-## A quick review of Node
+## Uma rápida revisão do Node
 
-Node uses the Event-Driven Architecture: it has an Event Loop for orchestration and a Worker Pool for expensive tasks.
+O Node usa a Arquitetura Orientada a Eventos: ele tem um Event Loop para orquestração e um Worker Pool para tarefas custosas.
 
-### What code runs on the Event Loop?
-When they begin, Node applications first complete an initialization phase, `require`'ing modules and registering callbacks for events.
-Node applications then enter the Event Loop, responding to incoming client requests by executing the appropriate callback.
-This callback executes synchronously, and may register asynchronous requests to continue processing after it completes.
-The callbacks for these asynchronous requests will also be executed on the Event Loop.
+### Que código é executado no Event Loop?
+Quando elas começam, aplicações Node primeiro concluem uma fase de inicialização, fazendo "`require`'ing" de módulos e registrando callbacks para events.
+As Aplicações Node entram no Event Loop, respondendo requisições recebidas do cliente para executar o callback apropriado.
+Esse callback executa de forma síncrona, e pode registrar requisições assíncronas para continuar o processamento após a conclusão.
 
-The Event Loop will also fulfill the non-blocking asynchronous requests made by its callbacks, e.g., network I/O.
+Os callbacks para essas requisições assíncronas também serão executadas no Event Loop.
 
-In summary, the Event Loop executes the JavaScript callbacks registered for events, and is also responsible for fulfilling non-blocking asynchronous requests like network I/O.
+O Event Loop também atenderá às requisições assíncronas não-bloqueantes feitas por seus callbacks, por exemplo, I/O de rede.
 
-### What code runs on the Worker Pool?
-Node's Worker Pool is implemented in libuv ([docs](http://docs.libuv.org/en/v1.x/threadpool.html)), which exposes a general task submission API.
+Em resumo, o Event Loop executa as callbacks JavaScript registradas por eventos, e também é responsável atender requisições assíncronas não-bloqueantes, como I/O de rede.
 
-Node uses the Worker Pool to handle "expensive" tasks.
-This includes I/O for which an operating system does not provide a non-blocking version, as well as particularly CPU-intensive tasks.
+### Que código é executado no Worker Pool?
+O Worker Pool do Node é implementado na libuv ([docs](http://docs.libuv.org/en/v1.x/threadpool.html)), que expõe uma API geral para envio de tarefas.
 
-These are the Node module APIs that make use of this Worker Pool:
-1. I/O-intensive
+O Node usa o Worker Pool para lidar com tarefas "custosas".
+Isso inclui I/O para quais um sistem operacional não fornece uma versão não-bloqueante, bem como tarefas particularmente intensivas em CPU.
+
+Estas são os módulos de APIs do Node que fazem uso desse Worker Pool:
+
+1. I/O intensivo
     1. [DNS](https://nodejs.org/api/dns.html): `dns.lookup()`, `dns.lookupService()`.
-    2. [File System](https://nodejs.org/api/fs.html#fs_threadpool_usage): All file system APIs except `fs.FSWatcher()` and those that are explicitly synchronous use libuv's threadpool.
-2. CPU-intensive
+    2. [Sistema de arquivo](https://nodejs.org/api/fs.html#fs_threadpool_usage): Todas APIs do sistema de arquivo exceto `fs.FSWatcher()` e aquelas que são explicitamente síncronas usam a threadpool da libuv.
+2. CPU intensivo
     1. [Crypto](https://nodejs.org/api/crypto.html): `crypto.pbkdf2()`, `crypto.scrypt()`, `crypto.randomBytes()`, `crypto.randomFill()`, `crypto.generateKeyPair()`.
-    2. [Zlib](https://nodejs.org/api/zlib.html#zlib_threadpool_usage): All zlib APIs except those that are explicitly synchronous use libuv's threadpool.
+    2. [Zlib](https://nodejs.org/api/zlib.html#zlib_threadpool_usage): Todas APIs do zlib exceto aquelas que são explicitamente síncronas usam a threadpool da libuv.
 
-In many Node applications, these APIs are the only sources of tasks for the Worker Pool. Applications and modules that use a [C++ add-on](https://nodejs.org/api/addons.html) can submit other tasks to the Worker Pool.
+Em muitas aplicações Node, essas APIs são as únicas fontes de tarefas para o Worker Pool. Aplicações e módulos que usam um [C++ add-on](https://nodejs.org/api/addons.html) podem enviar tarefas para o Worker Pool.
 
-For the sake of completeness, we note that when you call one of these APIs from a callback on the Event Loop, the Event Loop pays some minor setup costs as it enters the Node C++ bindings for that API and submits a task to the Worker Pool.
-These costs are negligible compared to the overall cost of the task, which is why the Event Loop is offloading it.
-When submitting one of these tasks to the Worker Pool, Node provides a pointer to the corresponding C++ function in the Node C++ bindings.
+Para cobrir todos os aspectos, observamos que quando você chama uma dessas APIs a partir de um callback no Event Loop, o Event Loop paga alguns custos menores de configuração, pois entra nas ligações do Node C++ para essa API e envia uma tarefa para ao Worker Pool.
+Esses custos são insignificantes em comparação ao custo total da tarefa, e é por isso que o Event Loop está sendo menos usado.
+Ao enviar uma dessas tarefas para o Worker Pool, o Node fornece um ponteiro para a função C++ correspondente nas ligações Node C++.
 
-### How does Node decide what code to run next?
-Abstractly, the Event Loop and the Worker Pool maintain queues for pending events and pending tasks, respectively.
+### Como o Node decide qual código executar a seguir?
+De forma abstrata, o Event Loop e o Worker Pool mantêm filas para eventos e tarefas pendentes, respectivamente.
 
-In truth, the Event Loop does not actually maintain a queue.
-Instead, it has a collection of file descriptors that it asks the operating system to monitor, using a mechanism like [epoll](http://man7.org/linux/man-pages/man7/epoll.7.html) (Linux), [kqueue](https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/KernelQueues/KernelQueues.html) (OSX), event ports (Solaris), or [IOCP](https://msdn.microsoft.com/en-us/library/windows/desktop/aa365198.aspx) (Windows).
-These file descriptors correspond to network sockets, any files it is watching, and so on.
-When the operating system says that one of these file descriptors is ready, the Event Loop translates it to the appropriate event and invokes the callback(s) associated with that event.
-You can learn more about this process [here](https://www.youtube.com/watch?v=P9csgxBgaZ8).
+Na verdade, o Event Loop não mantém realmente uma fila.
+Em vez disso, ele possui uma coleção de descritores de arquivos que solicita ao sistema operacional para monitorar, usando um mecanismo como [epoll](http://man7.org/linux/man-pages/man7/epoll.7.html) (Linux), [kqueue](https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/KernelQueues/KernelQueues.html) (OSX), event ports (Solaris), ou [IOCP](https://msdn.microsoft.com/en-us/library/windows/desktop/aa365198.aspx) (Windows).
+Esses descritores de arquivos correspondem aos sockets de rede, aos arquivos que estão sendo monitorados e assim por diante.
+Quando o sistema operacional diz que um desses descritores de arquivos está pronto, o Evente Loop o converte para o evento apropriado e chama os callbacks associados com esse evento.
+Você pode aprender mais sobre esse processo [aqui](https://www.youtube.com/watch?v=P9csgxBgaZ8).
 
-In contrast, the Worker Pool uses a real queue whose entries are tasks to be processed.
-A Worker pops a task from this queue and works on it, and when finished the Worker raises an "At least one task is finished" event for the Event Loop.
+Por outro lado, o Worker Pool usa uma fila real cujas entradas são tarefas a serem processadas.
+Um Worker abre uma tarefa nesse fila e trabalha nela, e quando concluída, o Worker gera um evento "Pelo menos uma tarefa está concluída" para o Event Loop.
 
 ### What does this mean for application design?
 In a one-thread-per-client system like Apache, each pending client is assigned its own thread.
