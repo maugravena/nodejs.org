@@ -101,7 +101,7 @@ Isso significa que, se o Event Loop passar muito tempo em algum ponto, todos os 
 
 Você nunca deve bloquear o Event Loop.
 Em outras palavras, cada um de seus callbacks JavaScript devem ser concluídos rapidamente.
-Isto, obviamente, também se aplica aos seus `wait`'s , seus` Promise.then`'s, e assim por diante.
+Isto, obviamente, também se aplica aos seus `wait`'s , seus `Promise.then`'s, e assim por diante.
 
 Uma boa maneira de garantir isso é estudar sobre a ["complexidade computacional"] (https://en.wikipedia.org/wiki/Time_complexity) de seus callbacks.
 Se o seu callback executar um número constante de etapas, independentemente de seus argumentos, você sempre dará a cada cliente pendente uma chance justa.
@@ -196,62 +196,63 @@ app.get('/redos-me', (req, res) => {
 });
 ```
 
-The vulnerable regexp in this example is a (bad!) way to check for a valid path on Linux.
-It matches strings that are a sequence of "/"-delimited names, like "/a/b/c".
-It is dangerous because it violates rule 1: it has a doubly-nested quantifier.
+O regexp vulnerável neste exemplo é uma maneira (ruim!) de verificar um caminho válido no Linux.
+Corresponde as strings que são uma sequência de nomes delimitados por "/", como "/a/b/c".
+Isso é perigoso porque viola a regra 1: possui um quantificador duplamente aninhado.
 
-If a client queries with filePath `///.../\n` (100 /'s followed by a newline character that the regexp's "." won't match), then the Event Loop will take effectively forever, blocking the Event Loop.
-This client's REDOS attack causes all other clients not to get a turn until the regexp match finishes.
+Se um cliente consulta com filePath `///.../\n` (100 /'s seguidos por um caractere de quebra de linha que o "." da regexp não corresponda), o Event Loop levará efetivamente para sempre, bloqueando o Event Loop.
+O ataque REDOS deste cliente faz com que todos os outros clientes não tenham sua vez até que a correspondência de regexp termine.
 
-For this reason, you should be leery of using complex regular expressions to validate user input.
+Por esse motivo, você deve desconfiar do uso de expressões regulares complexas para validar a entrada do usuário.
 
-#### Anti-REDOS Resources
-There are some tools to check your regexps for safety, like
+#### Recursos anti-REDOS
+Existem algumas ferramentas para verificar a segurança de seus regexps, como
 - [safe-regex](https://github.com/substack/safe-regex)
 - [rxxr2](http://www.cs.bham.ac.uk/~hxt/research/rxxr2/).
-However, neither of these will catch all vulnerable regexps.
+No entanto, nenhum deles capturará todos os regexps vulneráveis.
 
-Another approach is to use a different regexp engine.
-You could use the [node-re2](https://github.com/uhop/node-re2) module, which uses Google's blazing-fast [RE2](https://github.com/google/re2) regexp engine.
-But be warned, RE2 is not 100% compatible with Node's regexps, so check for regressions if you swap in the node-re2 module to handle your regexps.
-And particularly complicated regexps are not supported by node-re2.
+Outra abordagem é usar um mecanismo diferente de regexp.
+Você pode usar o módulo[node-re2](https://github.com/uhop/node-re2), que usa o mecanismo de regexp rápido [RE2](https://github.com/google/re2) do Google .
+Mas esteja avisado, o RE2 não é 100% compatível com os regexps do Node, portanto, verifique as regressões se você trocar para o módulo node-re2 para manipular seus regexps.
+E regexps particularmente complicados não são suportados pelo node-re2.
 
-If you're trying to match something "obvious", like a URL or a file path, find an example in a [regexp library](http://www.regexlib.com) or use an npm module, e.g. [ip-regex](https://www.npmjs.com/package/ip-regex).
+Se você estiver tentando corresponder a algo "óbvio", como uma URL ou um caminho de arquivo, encontre um exemplo em uma [biblioteca regexp](http://www.regexlib.com) ou use um módulo npm, por exemplo [ip-regex](https://www.npmjs.com/package/ip-regex).
 
-### Blocking the Event Loop: Node core modules
-Several Node core modules have synchronous expensive APIs, including:
+### Bloqueando o Event Loop: módulos principais do Node
+Vários módulos principais do Node têm APIs síncronas custosas, incluindo:
 - [Encryption](https://nodejs.org/api/crypto.html)
 - [Compression](https://nodejs.org/api/zlib.html)
 - [File system](https://nodejs.org/api/fs.html)
 - [Child process](https://nodejs.org/api/child_process.html)
 
-These APIs are expensive, because they involve significant computation (encryption, compression), require I/O (file I/O), or potentially both (child process). These APIs are intended for scripting convenience, but are not intended for use in the server context. If you execute them on the Event Loop, they will take far longer to complete than a typical JavaScript instruction, blocking the Event Loop.
+Essas APIs são custosas, porque envolvem computação significativa (criptografia, compactação), exigem I/O (I/O de arquivo) ou potencialmente ambas (child process). Essas APIs destinam-se à conveniência de script, mas não para uso no contexto de servidor. Se você executá-los no Event Loop, eles levarão muito mais tempo para serem concluídos do que uma instrução JavaScript típica, bloqueando o Event Loop.
 
-In a server, *you should not use the following synchronous APIs from these modules*:
-- Encryption:
-  - `crypto.randomBytes` (synchronous version)
+Em um servidor, *você não deve usar as seguintes APIs síncronas desses módulos*:
+- Criptografia:
+  - `crypto.randomBytes` (versão síncrona)
   - `crypto.randomFillSync`
   - `crypto.pbkdf2Sync`
-  - You should also be careful about providing large input to the encryption and decryption routines.
+  - Você também deve ter cuidado ao fornecer uma entrada grande para as rotinas de criptografia e descriptografia.
 - Compression:
+- Compressão:
   - `zlib.inflateSync`
   - `zlib.deflateSync`
-- File system:
-  - Do not use the synchronous file system APIs. For example, if the file you access is in a [distributed file system](https://en.wikipedia.org/wiki/Clustered_file_system#Distributed_file_systems) like [NFS](https://en.wikipedia.org/wiki/Network_File_System), access times can vary widely.
+- Sistema de arquivo:
+  - Não use as APIs do sistema de arquivos síncronas. Por exemplo, se o arquivo que você acessar estiver em um [sistema de arquivos distribuído](https://en.wikipedia.org/wiki/Clustered_file_system#Distributed_file_systems) como [NFS](https://en.wikipedia.org/wiki/ Network_File_System), os tempos de acesso podem variar bastante.
 - Child process:
   - `child_process.spawnSync`
   - `child_process.execSync`
   - `child_process.execFileSync`
 
-This list is reasonably complete as of Node v9.
+Esta lista está razoavelmente completa a partir do Node v9.
 
-### Blocking the Event Loop: JSON DOS
-`JSON.parse` and `JSON.stringify` are other potentially expensive operations.
-While these are `O(n)` in the length of the input, for large `n` they can take surprisingly long.
+### Bloqueando o Event Loop: JSON DOS
+`JSON.parse` e` JSON.stringify` são outras operações potencialmente custosas.
+Embora estes sejam `O(n)` no comprimento da entrada, para grandes `n` eles podem demorar surpreendentemente.
 
-If your server manipulates JSON objects, particularly those from a client, you should be cautious about the size of the objects or strings you work with on the Event Loop.
+Se o servidor manipular objetos JSON, principalmente os de um cliente, você deve ter cuidado com o tamanho dos objetos ou strings com as quais trabalha no Event Loop.
 
-Example: JSON blocking. We create an object `obj` of size 2^21 and `JSON.stringify` it, run `indexOf` on the string, and then JSON.parse it. The `JSON.stringify`'d string is 50MB. It takes 0.7 seconds to stringify the object, 0.03 seconds to indexOf on the 50MB string, and 1.3 seconds to parse the string.
+Exemplo: bloqueio de JSON. Criamos um objeto `obj` de tamanho 2^21 e `JSON.stringify`, rodamos `indexOf` na string e, em seguida, JSON.parse. A string `JSON.stringify`'d tem 50 MB. Demora 0,7 segundos para trasformar em string o objeto, 0,03 segundos para indexOf na string de 50 MB e 1,3 segundos para converter a string.
 
 ```javascript
 var obj = { a: 1 };
@@ -279,21 +280,22 @@ took = process.hrtime(before);
 console.log('JSON.parse took ' + took);
 ```
 
-There are npm modules that offer asynchronous JSON APIs. See for example:
-- [JSONStream](https://www.npmjs.com/package/JSONStream), which has stream APIs.
-- [Big-Friendly JSON](https://www.npmjs.com/package/bfj), which has stream APIs as well as asynchronous versions of the standard JSON APIs using the partitioning-on-the-Event-Loop paradigm outlined below.
+Existem módulos npm que oferecem APIs JSON assíncronas. Veja alguns exemplo:
+- [JSONStream](https://www.npmjs.com/package/JSONStream), que possui APIs de stream.
+- [Big-Friendly JSON](https://www.npmjs.com/package/bfj), que possui APIs de stream e versões assíncronas das APIs JSON padrão usando o paradigma de particionamento no Event Loop descrito abaixo.
 
-### Complex calculations without blocking the Event Loop
-Suppose you want to do complex calculations in JavaScript without blocking the Event Loop.
-You have two options: partitioning or offloading.
+### Cálculos complexos sem bloquear o Event Loop
+Suponha que você queira fazer cálculos complexos em JavaScript sem bloquear o Event Loop.
+Você tem duas opções: particionamento ou descarregamento.
 
 #### Partitioning
-You could *partition* your calculations so that each runs on the Event Loop but regularly yields (gives turns to) other pending events.
-In JavaScript it's easy to save the state of an ongoing task in a closure, as shown in example 2 below.
+#### Particionamento
+Você pode *particionar* seus cálculos para que cada um seja executado no Event Loop, mas produz regularmente (alterna) outros eventos pendentes.
+Em JavaScript, é fácil salvar o estado de uma tarefa em andamento em um closure, como mostra o exemplo 2 abaixo.
 
-For a simple example, suppose you want to compute the average of the numbers `1` to `n`.
+Para um exemplo simples, suponha que você queira calcular a média dos números `1` até` n`.
 
-Example 1: Un-partitioned average, costs `O(n)`
+Exemplo 1: Média não particionada, custos `O(n)`
 
 ```javascript
 for (let i = 0; i < n; i++)
@@ -302,7 +304,7 @@ let avg = sum / n;
 console.log('avg: ' + avg);
 ```
 
-Example 2: Partitioned average, each of the `n` asynchronous steps costs `O(1)`.
+Exemplo 2: Média particionada, cada uma das etapas assíncronas `n` custa `O(1)`.
 
 ```javascript
 function asyncAvg(n, avgCB) {
