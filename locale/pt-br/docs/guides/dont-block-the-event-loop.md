@@ -31,7 +31,7 @@ Enquanto uma thread está bloqueada trabalhando para um cliente, ela não pode l
 Isso fornece duas motivações para não bloquear o Event Loop nem o Worker Pool:
 
 1. Performance: Se você executar regularmente atividades pesadas em qualquer tipo de thread, o *throughput* (requisições por segundo) do seu servidor sofrerá.
-2. Segurança: Se for possível que para determinadas entradas uma de suas threads possam bloquear, um cliente malicioso pode enviar essa "entrada incorreta", para fazer suas threads bloquearem, e mantê-las trabalhando para outros clientes. Isso seria um ataque de [Negação de Serviço](https://en.wikipedia.org/wiki/Denial-of-service_attack)
+2. Segurança: Se for possível que para determinadas entradas uma de suas threads possam bloquear, um cliente malicioso pode enviar esse "evil input", para fazer suas threads bloquearem, e mantê-las trabalhando para outros clientes. Isso seria um ataque de [Negação de Serviço](https://en.wikipedia.org/wiki/Denial-of-service_attack)
 
 ## Uma rápida revisão do Node
 
@@ -81,32 +81,33 @@ Você pode aprender mais sobre esse processo [aqui](https://www.youtube.com/watc
 Por outro lado, o Worker Pool usa uma fila real cujas entradas são tarefas a serem processadas.
 Um Worker abre uma tarefa nesse fila e trabalha nela, e quando concluída, o Worker gera um evento "Pelo menos uma tarefa está concluída" para o Event Loop.
 
-### What does this mean for application design?
-In a one-thread-per-client system like Apache, each pending client is assigned its own thread.
-If a thread handling one client blocks, the operating system will interrupt it and give another client a turn.
-The operating system thus ensures that clients that require a small amount of work are not penalized by clients that require more work.
+### O que isso significa para o design da aplicação?
+Em um sistema uma-thread-por-cliente tipo Apache, cada cliente pendente recebe sua própria thread.
+Se uma thread que manipula um cliente bloqueado, o sistema operacional irá interropé-lo e dará a vez para outro cliente.
+O sistema operacional garante, assim, que os clientes que exigem uma pequena quantidade de trabalho não sejam prejudicados por clientes que exigem mais trabalho.
 
-Because Node handles many clients with few threads, if a thread blocks handling one client's request, then pending client requests may not get a turn until the thread finishes its callback or task.
-*The fair treatment of clients is thus the responsibility of your application*.
-This means that you shouldn't do too much work for any client in any single callback or task.
+Como o Node lida com muitos clientes com poucas threads, se uma thread bloqueia o processamento da requisição de um cliente, as requisições pendentes do cliente podem não ter uma volta até que a thread conclua seu callback ou tarefa.
+*O tratamento justo dos clientes é, portanto, de responsabilidade de sua applicação*.
+Isso significa que você não deve fazer muito trabalho para nenhum cliente em uma única tarefa ou callback.
 
 This is part of why Node can scale well, but it also means that you are responsible for ensuring fair scheduling.
+Isso faz parte do motivo pelo qual
 The next sections talk about how to ensure fair scheduling for the Event Loop and for the Worker Pool.
 
-## Don't block the Event Loop
-The Event Loop notices each new client connection and orchestrates the generation of a response.
-All incoming requests and outgoing responses pass through the Event Loop.
-This means that if the Event Loop spends too long at any point, all current and new clients will not get a turn.
+## Não bloqueia o Event Loop
+O Event Loop percebe cada nova conexão do cliente e orquestra a geração de uma resposta.
+Todas as solicitações recebidas e respostas enviadas passam pelo Event Loop.
+Isso significa que, se o Event Loop passar muito tempo em algum ponto, todos os clientes atuais e novos não serão atendidos.
 
-You should make sure you never block the Event Loop.
-In other words, each of your JavaScript callbacks should complete quickly.
-This of course also applies to your `await`'s, your `Promise.then`'s, and so on.
+Você nunca deve bloquear o Event Loop.
+Em outras palavras, cada um de seus callbacks JavaScript devem ser concluídos rapidamente.
+Isto, obviamente, também se aplica aos seus `wait`'s , seus` Promise.then`'s, e assim por diante.
 
-A good way to ensure this is to reason about the ["computational complexity"](https://en.wikipedia.org/wiki/Time_complexity) of your callbacks.
-If your callback takes a constant number of steps no matter what its arguments are, then you'll always give every pending client a fair turn.
-If your callback takes a different number of steps depending on its arguments, then you should think about how long the arguments might be.
+Uma boa maneira de garantir isso é estudar sobre a ["complexidade computacional"] (https://en.wikipedia.org/wiki/Time_complexity) de seus callbacks.
+Se o seu callback executar um número constante de etapas, independentemente de seus argumentos, você sempre dará a cada cliente pendente uma chance justa.
+Se seu callback executa um número considerável de etapas, dependendo de seus argumentos, pense em quanto tempo os argumentos podem demorar.
 
-Example 1: A constant-time callback.
+Exemplo 1: Um callback em tempo constante.
 
 ```javascript
 app.get('/constant-time', (req, res) => {
@@ -114,7 +115,7 @@ app.get('/constant-time', (req, res) => {
 });
 ```
 
-Example 2: An `O(n)` callback. This callback will run quickly for small `n` and more slowly for large `n`.
+Exemplo 2: Um callback `O(n)`. Este callback será executado rapidamente para pequenos `n` e mais lentamente para grandes `n`.
 
 ```javascript
 app.get('/countToN', (req, res) => {
@@ -129,7 +130,7 @@ app.get('/countToN', (req, res) => {
 });
 ```
 
-Example 3: An `O(n^2)` callback. This callback will still run quickly for small `n`, but for large `n` it will run much more slowly than the previous `O(n)` example.
+Exemplo 3: Um callback `O(n^2)`. Este callback ainda será executado rapidamente para pequenos `n`, mas para grandes `n`, será executado muito mais lentamente que o exemplo anterior `O(n)`.
 
 ```javascript
 app.get('/countToN2', (req, res) => {
@@ -146,38 +147,38 @@ app.get('/countToN2', (req, res) => {
 });
 ```
 
-### How careful should you be?
-Node uses the Google V8 engine for JavaScript, which is quite fast for many common operations.
-Exceptions to this rule are regexps and JSON operations, discussed below.
+### Quão cuidadoso você deve ser?
+O Node usa a engine V8 do Google para JavaScript, o que é bastante rápido para muitas operações comuns.
+Exceções a esta regra são regexps e operações JSON, discutidas abaixo.
 
-However, for complex tasks you should consider bounding the input and rejecting inputs that are too long.
-That way, even if your callback has large complexity, by bounding the input you ensure the callback cannot take more than the worst-case time on the longest acceptable input.
-You can then evaluate the worst-case cost of this callback and determine whether its running time is acceptable in your context.
+No entanto, para tarefas complexas, considere limitar a entrada e rejeitar entradas muito longas.
+Dessa forma, mesmo que seu callback tenha grande complexidade, limitando a entrada, você garante que o callback não pode demorar mais do que o pior caso na entrada aceitável mais longa.
+Você pode avaliar o pior caso desse callback e determinar se o tempo de execução é aceitável no seu contexto.
 
-### Blocking the Event Loop: REDOS
-One common way to block the Event Loop disastrously is by using a "vulnerable" [regular expression](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions).
+### Bloqueando o Event Loop: REDOS
+Uma maneira comum de bloquear desastrosamente o Event Loop é usar uma [expressão regular](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions) "vulnerável".
 
-#### Avoiding vulnerable regular expressions
-A regular expression (regexp) matches an input string against a pattern.
-We usually think of a regexp match as requiring a single pass through the input string --- `O(n)` time where `n` is the length of the input string.
-In many cases, a single pass is indeed all it takes.
-Unfortunately, in some cases the regexp match might require an exponential number of trips through the input string --- `O(2^n)` time.
-An exponential number of trips means that if the engine requires `x` trips to determine a match, it will need `2*x` trips if we add only one more character to the input string.
-Since the number of trips is linearly related to the time required, the effect of this evaluation will be to block the Event Loop.
+#### Evitando expressões regulares vulneráveis
+Uma expressão regular (regexp) corresponde a uma sequência de entrada diante de um padrão.
+Geralmente pensamos em uma combinação regexp exigindo uma única passagem pela string de entrada --- tempo `O(n)` em que `n` é o comprimento da string de entrada.
+Em muitos casos, basta uma única passegem.
+Infelizmente, em alguns casos, a correspondência regexp pode exigir um número exponencial de viagens pela string de entrada ---  tempo `O(2^n)`.
+Um número exponencial de viagens significa que, se o mecanismo exigir `x` viagens para determinar uma correspondência, serão necessárias `2*x` viagens se adicionarmos apenas mais um caractere à string de entrada.
+Como o número de viagens está linearmente relacionado ao tempo necessário, o efeito dessa avaliação será bloquear o Event Loop.
 
-A *vulnerable regular expression* is one on which your regular expression engine might take exponential time, exposing you to [REDOS](https://www.owasp.org/index.php/Regular_expression_Denial_of_Service_-_ReDoS) on "evil input".
-Whether or not your regular expression pattern is vulnerable (i.e. the regexp engine might take exponential time on it) is actually a difficult question to answer, and varies depending on whether you're using Perl, Python, Ruby, Java, JavaScript, etc., but here are some rules of thumb that apply across all of these languages:
+Uma *expressão regular vulnerável* é aquela em que seu mecanismo de expressão regular pode levar um tempo exponencial, expondo você a [REDOS](https://www.owasp.org/index.php/Regular_expression_Denial_of_Service_-_ReDoS) no "evil input".
+Se o seu padrão de expressão regular é vulnerável (ou seja, o mecanismo regexp pode levar um tempo exponencial) é realmente uma pergunta difícil de responder e varia dependendo de você estar usando Perl, Python, Ruby, Java, JavaScript, etc., mas aqui estão algumas regras práticas que se aplicam a todas essas linguagens:
 
-1. Avoid nested quantifiers like `(a+)*`. Node's regexp engine can handle some of these quickly, but others are vulnerable.
-2. Avoid OR's with overlapping clauses, like `(a|a)*`. Again, these are sometimes-fast.
-3. Avoid using backreferences, like `(a.*) \1`. No regexp engine can guarantee evaluating these in linear time.
-4. If you're doing a simple string match, use `indexOf` or the local equivalent. It will be cheaper and will never take more than `O(n)`.
+1. Evite quantificadores aninhados como `(a+)*`. O mecanismo regexp do Node pode lidar com alguns deles rapidamente, mas outros são vulneráveis.
+2. Evite OR's com cláusulas sobrepostas, como `(a|a)*`. Novamente, esses nem sempre são rápidos.
+3. Evite usar referências anteriores, como `(a.*) \1`. Nenhum mecanismo regexp pode garantir a avaliação em tempo linear.
+4. Se você estiver fazendo uma correspondência simples de string, use `indexOf` ou o equivalente local. Será mais barato e nunca levará mais que `O(n)`.
 
-If you aren't sure whether your regular expression is vulnerable, remember that Node generally doesn't have trouble reporting a *match* even for a vulnerable regexp and a long input string.
-The exponential behavior is triggered when there is a mismatch but Node can't be certain until it tries many paths through the input string.
+Se você não tiver certeza se sua expressão regular é vulnerável, lembre-se de que o Node geralmente não tem problemas para relatar uma *correspondência*, mesmo para uma regexp vulnerável e uma longa string de entrada.
+O comportamento exponencial é acionado quando há uma incompatibilidade, mas o Node não pode ter certeza até que tente muitos caminhos pela string de entrada.
 
-#### A REDOS example
-Here is an example vulnerable regexp exposing its server to REDOS:
+#### Um exemplo de REDOS
+Aqui está um exemplo de regexp vulnerável, expondo seu servidor ao REDOS:
 
 ```javascript
 app.get('/redos-me', (req, res) => {
