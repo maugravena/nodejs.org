@@ -247,7 +247,7 @@ Em um servidor, *você não deve usar as seguintes APIs síncronas desses módul
 Esta lista está razoavelmente completa a partir do Node v9.
 
 ### Bloqueando o Event Loop: JSON DOS
-`JSON.parse` e` JSON.stringify` são outras operações potencialmente custosas.
+`JSON.parse` e `JSON.stringify` são outras operações potencialmente custosas.
 Embora estes sejam `O(n)` no comprimento da entrada, para grandes `n` eles podem demorar surpreendentemente.
 
 Se o servidor manipular objetos JSON, principalmente os de um cliente, você deve ter cuidado com o tamanho dos objetos ou strings com as quais trabalha no Event Loop.
@@ -288,12 +288,11 @@ Existem módulos npm que oferecem APIs JSON assíncronas. Veja alguns exemplo:
 Suponha que você queira fazer cálculos complexos em JavaScript sem bloquear o Event Loop.
 Você tem duas opções: particionamento ou descarregamento.
 
-#### Partitioning
 #### Particionamento
 Você pode *particionar* seus cálculos para que cada um seja executado no Event Loop, mas produz regularmente (alterna) outros eventos pendentes.
 Em JavaScript, é fácil salvar o estado de uma tarefa em andamento em um closure, como mostra o exemplo 2 abaixo.
 
-Para um exemplo simples, suponha que você queira calcular a média dos números `1` até` n`.
+Para um exemplo simples, suponha que você queira calcular a média dos números `1` até `n`.
 
 Exemplo 1: Média não particionada, custos `O(n)`
 
@@ -334,67 +333,67 @@ asyncAvg(n, function(avg){
 });
 ```
 
-You can apply this principle to array iterations and so forth.
+Você pode aplicar esse princípio a iterações de array e assim por diante.
 
 #### Offloading
-If you need to do something more complex, partitioning is not a good option.
-This is because partitioning uses only the Event Loop, and you won't benefit from multiple cores almost certainly available on your machine.
-*Remember, the Event Loop should orchestrate client requests, not fulfill them itself.*
-For a complicated task, move the work off of the Event Loop onto a Worker Pool.
+Se você precisar fazer algo mais complexo, o particionamento não é uma boa opção.
+Isso ocorre porque o particionamento usa apenas o Event Loop e você não se beneficiará de vários núcleos quase certamente disponíveis em sua máquina.
+*Lembre-se, o Event Loop deve orquestrar requisições de clientes, não atendê-las.*
+Para uma tarefa complicada, mova o trabalho do Event Loop para uma Worker Pool.
 
-##### How to offload
-You have two options for a destination Worker Pool to which to offload work.
-1. You can use the built-in Node Worker Pool by developing a [C++ addon](https://nodejs.org/api/addons.html). On older versions of Node, build your C++ addon using [NAN](https://github.com/nodejs/nan), and on newer versions use [N-API](https://nodejs.org/api/n-api.html). [node-webworker-threads](https://www.npmjs.com/package/webworker-threads) offers a JavaScript-only way to access Node's Worker Pool.
-2. You can create and manage your own Worker Pool dedicated to computation rather than Node's I/O-themed Worker Pool. The most straightforward ways to do this is using [Child Process](https://nodejs.org/api/child_process.html) or [Cluster](https://nodejs.org/api/cluster.html).
+##### Como fazer offload
+Você tem duas opções para uma Work Pool de destino no qual descarregar o trabalho.
+1. Você pode usar a Worker Pool built-in do Node desenvolvendo um [addon C++](https://nodejs.org/api/addons.html). Nas versões mais antigas do Node, crie seu complemento C++ usando [NAN](https://github.com/nodejs/nan) e nas versões mais recentes use [N-API](https://nodejs.org/api/n -api.html). [node-webworker-threads](https://www.npmjs.com/package/webworker-threads) oferece uma maneira JavaScript-only para acessar a Worker Pool do Node.
+2. Você pode criar e gerenciar sua própria Worker Pool dedicada à computação, em vez da Worker Pool de I/O do Node. As maneiras mais simples de fazer isso são usando [Child Process](https://nodejs.org/api/child_process.html) ou [Cluster](https://nodejs.org/api/cluster.html).
 
-You should *not* simply create a [Child Process](https://nodejs.org/api/child_process.html) for every client.
-You can receive client requests more quickly than you can create and manage children, and your server might become a [fork bomb](https://en.wikipedia.org/wiki/Fork_bomb).
+Você *não* deve simplesmente criar um [Child Process](https://nodejs.org/api/child_process.html) para cada cliente.
+Você pode receber requisições de clientes mais rapidamente do que criar e gerenciar children, e seu servidor pode se tornar um [fork pump](https://en.wikipedia.org/wiki/Fork_bomb).
 
-##### Downside of offloading
-The downside of the offloading approach is that it incurs overhead in the form of *communication costs*.
-Only the Event Loop is allowed to see the "namespace" (JavaScript state) of your application.
-From a Worker, you cannot manipulate a JavaScript object in the Event Loop's namespace.
-Instead, you have to serialize and deserialize any objects you wish to share.
-Then the Worker can operate on its own copy of these object(s) and return the modified object (or a "patch") to the Event Loop.
+##### Desvantagem do offloading
+A desvantagem da abordagem de offloading é que ela incorre em custos indiretos na forma de *custos de comunicação*.
+Somente o Event Loop tem permissão para ver o "namespace" (estado JavaScript) do sua aplicação.
+De um Worker, você não pode manipular um objeto JavaScript no namespace do Event Loop.
+Em vez disso, você deve serializar e desserializar todos os objetos que deseja compartilhar.
+Em seguida, o Worker pode operar em sua própria cópia desses objetos e retornar o objeto modificado (ou um "patch") ao Event Loop.
 
-For serialization concerns, see the section on JSON DOS.
+Para questões de serialização, consulte a seção JSON DOS.
 
-##### Some suggestions for offloading
-You may wish to distinguish between CPU-intensive and I/O-intensive tasks because they have markedly different characteristics.
+##### Algumas sugestões para offloading
+Você pode fazer uma distinção entre tarefas intensivas em CPU e I/O, porque elas possuem características marcadamente diferentes.
 
-A CPU-intensive task only makes progress when its Worker is scheduled, and the Worker must be scheduled onto one of your machine's [logical cores](https://nodejs.org/api/os.html#os_os_cpus).
-If you have 4 logical cores and 5 Workers, one of these Workers cannot make progress.
-As a result, you are paying overhead (memory and scheduling costs) for this Worker and getting no return for it.
+Uma tarefa com uso intenso de CPU só progride quando seu Worker está agendado e o Worker deve ser agendado em um dos [núcleos lógicos](https://nodejs.org/api/os.html#os_os_cpus) da sua máquina .
+Se você tiver 4 núcleos lógicos e 5 Workers, um deles não poderá progredir.
+Como resultado, você está pagando custos indiretos (memória e custos de agendamento) por este Worker e não recebe retorno por isso.
 
-I/O-intensive tasks involve querying an external service provider (DNS, file system, etc.) and waiting for its response.
-While a Worker with an I/O-intensive task is waiting for its response, it has nothing else to do and can be de-scheduled by the operating system, giving another Worker a chance to submit their request.
-Thus, *I/O-intensive tasks will be making progress even while the associated thread is not running*.
-External service providers like databases and file systems have been highly optimized to handle many pending requests concurrently.
-For example, a file system will examine a large set of pending write and read requests to merge conflicting updates and to retrieve files in an optimal order (e.g. see [these slides](http://researcher.ibm.com/researcher/files/il-AVISHAY/01-block_io-v1.3.pdf)).
+As tarefas intensivas de I/O envolvem a consulta de um provedor de serviços externo (DNS, sistema de arquivos etc.) e a espera de sua resposta.
+Enquanto um Worker com uma tarefa intensiva de I/O está aguardando sua resposta, ele não tem mais nada a fazer e pode ser descontinuado pelo sistema operacional, dando a outro Worker a chance de enviar sua requisição.
+Portanto, *as tarefas intensivas em I/O farão progressos mesmo enquanto a thread associada não estiver em execução*.
+Os provedores de serviços externos, como bancos de dados e sistemas de arquivos, foram altamente otimizados para lidar com muitas requisições pendentes simultaneamente.
+Por exemplo, um sistema de arquivos examinará um grande conjunto de requisições de gravação e leitura pendentes para mesclar atualizações conflitantes e recuperar arquivos em uma ordem ideal (por exemplo, consulte [estes slides](http://researcher.ibm.com/researcher/files/il-AVISHAY/01-block_io-v1.3.pdf)).
 
-If you rely on only one Worker Pool, e.g. the Node Worker Pool, then the differing characteristics of CPU-bound and I/O-bound work may harm your application's performance.
+Se você confiar em apenas uma Worker Pool, por exemplo, o Node Worker Pool, as diferentes características do trabalho vinculado à CPU e vinculado à I/O podem prejudicar o desempenho da aplicação.
 
-For this reason, you might wish to maintain a separate Computation Worker Pool.
+Por esse motivo, convém manter uma Computation Worker Pool separada.
 
-#### Offloading: conclusions
-For simple tasks, like iterating over the elements of an arbitrarily long array, partitioning might be a good option.
-If your computation is more complex, offloading is a better approach: the communication costs, i.e. the overhead of passing serialized objects between the Event Loop and the Worker Pool, are offset by the benefit of using multiple cores.
+#### Offloading: concluções
+Para tarefas simples, como iterar sobre os elementos de um array arbitrariamente longa, o particionamento pode ser uma boa opção.
+Se o seu cálculo for mais complexo, o offloading é uma abordagem melhor: os custos de comunicação, ou seja, a sobrecarga de passagem de objetos serializados entre o Event Loop e a Worker Pool, são compensados pelo benefício do uso de múltiplos núcleos.
 
-However, if your server relies heavily on complex calculations, you should think about whether Node is really a good fit. Node excels for I/O-bound work, but for expensive computation it might not be the best option.
+No entanto, se o seu servidor depende muito de cálculos complexos, você deve pensar se o Node é realmente boa escolha. O Node é excelente para trabalhos ligados a I/O, mas para cálculos custosos, pode não ser a melhor opção.
 
-If you take the offloading approach, see the section on not blocking the Worker Pool.
+Se você adotar a abordagem de offloading, consulte a seção sobre não bloquear a Worker Pool.
 
-## Don't block the Worker Pool
-Node has a Worker Pool composed of `k` Workers.
-If you are using the Offloading paradigm discussed above, you might have a separate Computational Worker Pool, to which the same principles apply.
-In either case, let us assume that `k` is much smaller than the number of clients you might be handling concurrently.
-This is in keeping with Node's "one thread for many clients" philosophy, the secret to its scalability.
+## Não bloqueie o Worker Pool
+O Node possui uma Worker Pool composto por Workers `k`.
+Se você estiver usando o paradigma de Offloading discutido acima, poderá ter uma Computational Worker Pool separado, ao qual os mesmos princípios se aplicam.
+Em qualquer um dos casos, vamos supor que `k` seja muito menor do que o número de clientes que você pode estar lidando simultaneamente.
+Isso está de acordo com a filosofia "uma thread para muitos clientes" do Node, o segredo de sua escalabilidade.
 
-As discussed above, each Worker completes its current Task before proceeding to the next one on the Worker Pool queue.
+Conforme discutido acima, cada Worker conclui sua Task atual antes de prosseguir para a próxima na fila da Worker Pool.
 
-Now, there will be variation in the cost of the Tasks required to handle your clients' requests.
-Some Tasks can be completed quickly (e.g. reading short or cached files, or producing a small number of random bytes), and others will take longer (e.g reading larger or uncached files, or generating more random bytes).
-Your goal should be to *minimize the variation in Task times*, and you should use *Task partitioning* to accomplish this.
+Agora, haverá variação no custo das Tasks necessárias para lidar com as requisições dos seus clientes.
+Algumas Tasks podem ser concluídas rapidamente (por exemplo, lendo arquivos curtos ou em cache ou produzindo um pequeno número de bytes aleatórios) e outras demoram mais (por exemplo, lendo arquivos maiores ou não em cache ou gerando mais bytes aleatórios).
+Seu objetivo deve ser *minimizar a variação nos tempos de Task* e você deve usar *Particionamento de Task* para fazer isso.
 
 ### Minimizing the variation in Task times
 If a Worker's current Task is much more expensive than other Tasks, then it will be unavailable to work on other pending Tasks.
