@@ -395,29 +395,29 @@ Agora, haverá variação no custo das Tasks necessárias para lidar com as requ
 Algumas Tasks podem ser concluídas rapidamente (por exemplo, lendo arquivos curtos ou em cache ou produzindo um pequeno número de bytes aleatórios) e outras demoram mais (por exemplo, lendo arquivos maiores ou não em cache ou gerando mais bytes aleatórios).
 Seu objetivo deve ser *minimizar a variação nos tempos de Task* e você deve usar *Particionamento de Task* para fazer isso.
 
-### Minimizing the variation in Task times
-If a Worker's current Task is much more expensive than other Tasks, then it will be unavailable to work on other pending Tasks.
-In other words, *each relatively long Task effectively decreases the size of the Worker Pool by one until it is completed*.
-This is undesirable because, up to a point, the more Workers in the Worker Pool, the greater the Worker Pool throughput (tasks/second) and thus the greater the server throughput (client requests/second).
-One client with a relatively expensive Task will decrease the throughput of the Worker Pool, in turn decreasing the throughput of the server.
+### Minimizando a variação no tempo das Tasks
+Se a Task atual de um Worker for muito mais custosa que outras Tasks, não estará disponível para trabalhar em outras Tasks pendentes.
+Em outras palavras, *cada Task relativamente longa diminui efetivamente o tamanho do Worker Pool até que alguma seja concluída*.
+Isso é indesejável porque, até certo ponto, quanto mais Workers na Worker Pool, maior a taxa de transferência da Worker Pool(tarefas/segundo) e, portanto, maior a taxa de transferência do servidor (requisição do cliente/segundo).
+Um cliente com uma Task relativamente custosa diminuirá a taxa de transferência do Worker Pool, diminuindo a taxa de transferência do servidor.
 
-To avoid this, you should try to minimize variation in the length of Tasks you submit to the Worker Pool.
-While it is appropriate to treat the external systems accessed by your I/O requests (DB, FS, etc.) as black boxes, you should be aware of the relative cost of these I/O requests, and should avoid submitting requests you can expect to be particularly long.
+Para evitar isso, tente minimizar a variação no comprimento das Tasks enviadas ao Worker Pool.
+Embora seja apropriado tratar os sistemas externos acessados por suas requisições de I/O (DB, FS, etc.) como caixas-pretas, você deve estar ciente do custo relativo dessas requisições de I/O, e evite enviar requisições que você espera que sejam particularmente longas.
 
-Two examples should illustrate the possible variation in task times.
+Dois exemplos devem ilustrar a possível variação nos tempos das tarefas.
 
-#### Variation example: Long-running file system reads
-Suppose your server must read files in order to handle some client requests.
-After consulting Node's [File system](https://nodejs.org/api/fs.html) APIs, you opted to use `fs.readFile()` for simplicity.
-However, `fs.readFile()` is ([currently](https://github.com/nodejs/node/pull/17054)) not partitioned: it submits a single `fs.read()` Task spanning the entire file.
-If you read shorter files for some users and longer files for others, `fs.readFile()` may introduce significant variation in Task lengths, to the detriment of Worker Pool throughput.
+#### Exemplo de variação: leituras no sistema de arquivos de longa execução
+Suponha que seu servidor precise ler arquivos para lidar com algumas requisições do cliente.
+Após consultar as APIs de [File system](https://nodejs.org/api/fs.html) do Node, você optou por usar o `fs.readFile()` para simplificar.
+No entanto, `fs.readFile()` é ([atualmente](https://github.com/nodejs/node/pull/17054)) não particionado: ele envia uma única Task `fs.read()` abrangendo todo o arquivo.
+Se você ler arquivos mais curtos para alguns usuários e arquivos mais longos para outros, `fs.readFile()` poderá introduzir variações significativas no tamanho das Tasks, em detrimento da taxa de transferência da Worker Pool.
 
-For a worst-case scenario, suppose an attacker can convince your server to read an *arbitrary* file (this is a [directory traversal vulnerability](https://www.owasp.org/index.php/Path_Traversal)).
-If your server is running Linux, the attacker can name an extremely slow file: [`/dev/random`](http://man7.org/linux/man-pages/man4/random.4.html).
-For all practical purposes, `/dev/random` is infinitely slow, and every Worker asked to read from `/dev/random` will never finish that Task.
-An attacker then submits `k` requests, one for each Worker, and no other client requests that use the Worker Pool will make progress.
+Para o pior cenário, suponha que um atacante possa convencer seu servidor para ler um arquivo *arbitrário* (esta é uma [directory traversal vulnerability](https://www.owasp.org/index.php/Path_Traversal)).
+Se o seu servidor estiver executando o Linux, o atacante poderá nomear um arquivo extremamente lento: [`/dev/random`](http://man7.org/linux/man-pages/man4/random.4.html).
+Para todos os propósitos práticos, `/dev/random` é infinitamente lento, e todo Worker solicitado a ler em `/dev/random` nunca terminará essa tarefa.
+Um atacante envia requisições `k`, uma para cada Work, e nenhuma outra requisição de cliente que use a Worker Pool fará progresso.
 
-#### Variation example: Long-running crypto operations
+#### Exemplo de variação: operações de criptografia de longa execução
 Suppose your server generates cryptographically secure random bytes using [`crypto.randomBytes()`](https://nodejs.org/api/crypto.html#crypto_crypto_randombytes_size_callback).
 `crypto.randomBytes()` is not partitioned: it creates a single `randomBytes()` Task to generate as many bytes as you requested.
 If you create fewer bytes for some users and more bytes for others, `crypto.randomBytes()` is another source of variation in Task lengths.
