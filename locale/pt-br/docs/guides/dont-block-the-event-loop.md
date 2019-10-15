@@ -1,9 +1,9 @@
 ---
-title: Não bloqueie o Event Loop (ou o Worker Pool)
+title: Não bloqueie o Event Loop (ou a Worker Pool)
 layout: docs.hbs
 ---
 
-# Não bloqueie o Event Loop (ou o Worker Pool)
+# Não bloqueie o Event Loop (ou a Worker Pool)
 
 ## Você deve ler esse guia?
 Se você está escrevendo algo mais complicado que um breve script de linha de comando, ler este guia ajudará você a escrever aplicativos de maior desempenho e mais seguros.
@@ -12,7 +12,7 @@ Este documento foi escrito com servidores Node em mente, mas os conceitos são a
 Onde detalhes específicos do sistema operacional variam, este documento é centrado no Linux.
 
 ## Resumo
-O Node.js executa código JavaScript no Event Loop (inicialização e callbacks), e oferece um Worker Pool para manipular tarefas custusas como I/O de arquivo.
+O Node.js executa código JavaScript no Event Loop (inicialização e callbacks), e oferece uma Worker Pool para manipular tarefas custusas como I/O de arquivo.
 Node escala bem, as vezes mais do que abordagens pesadas como Apache.
 O segredo da escalabilidade do Node é que ele usa um pequeno número de threads para manipular muitos clientes.
 Se o Node pode trabalhar com menos threads, ele poderá gastar mais tempo do seu sistema e memória trabalhando nos clientes em vez de disperdiçar recursos de espaço e tempo para as threads (memória e mudança de contexto).
@@ -20,22 +20,22 @@ Mas pelo fato do Node ter poucas threads, você precisa estruturar sua aplicaç�
 
 Aqui está um princípio básico para manter o servidor Node rápido: *Node é rápido quando o trabalho associado a cada cliente em um determinado momento é "pequeno"*.
 
-Isso se aplica a callbacks no Event Loop e tarefas no Worker Pool.
+Isso se aplica a callbacks no Event Loop e tarefas na Worker Pool.
 
-## Por que eu devo evitar bloquear o Event Loop e o Worker Pool?
+## Por que eu devo evitar bloquear o Event Loop e a Worker Pool?
 O Node usa um pequeno número de threads para manipular muitos clientes.
-No Node existem dois tipos de threads: um Event Loop (também conhecido como main loop, main thread, event thread, etc.), e uma pool de `k` Workers em um Worker Pool (também conhecido como threadpool)
+No Node existem dois tipos de threads: um Event Loop (também conhecido como main loop, main thread, event thread, etc.), e uma pool de `k` Workers em uma Worker Pool (também conhecido como threadpool)
 
 Se uma thread está levando muito tempo para excutar um callback (Event Loop) ou uma tarefa (Worker), nós a chamamos de "bloqueada".
 Enquanto uma thread está bloqueada trabalhando para um cliente, ela não pode lidar com requisições de outros clientes.  
-Isso fornece duas motivações para não bloquear o Event Loop nem o Worker Pool:
+Isso fornece duas motivações para não bloquear o Event Loop nem a Worker Pool:
 
 1. Performance: Se você executar regularmente atividades pesadas em qualquer tipo de thread, o *throughput* (requisições por segundo) do seu servidor sofrerá.
 2. Segurança: Se for possível que para determinadas entradas uma de suas threads possam bloquear, um cliente malicioso pode enviar esse "evil input", para fazer suas threads bloquearem, e mantê-las trabalhando para outros clientes. Isso seria um ataque de [Negação de Serviço](https://en.wikipedia.org/wiki/Denial-of-service_attack)
 
 ## Uma rápida revisão do Node
 
-O Node usa a Arquitetura Orientada a Eventos: ele tem um Event Loop para orquestração e um Worker Pool para tarefas custosas.
+O Node usa a Arquitetura Orientada a Eventos: ele tem um Event Loop para orquestração e uma Worker Pool para tarefas custosas.
 
 ### Que código é executado no Event Loop?
 Quando elas começam, aplicações Node primeiro concluem uma fase de inicialização, fazendo "`require`'ing" de módulos e registrando callbacks para events.
@@ -48,13 +48,13 @@ O Event Loop também atenderá às requisições assíncronas não-bloqueantes f
 
 Em resumo, o Event Loop executa as callbacks JavaScript registradas por eventos, e também é responsável atender requisições assíncronas não-bloqueantes, como I/O de rede.
 
-### Que código é executado no Worker Pool?
-O Worker Pool do Node é implementado na libuv ([docs](http://docs.libuv.org/en/v1.x/threadpool.html)), que expõe uma API geral para envio de tarefas.
+### Que código é executado na Worker Pool?
+A Worker Pool do Node é implementado na libuv ([docs](http://docs.libuv.org/en/v1.x/threadpool.html)), que expõe uma API geral para envio de tarefas.
 
-O Node usa o Worker Pool para lidar com tarefas "custosas".
+O Node usa a Worker Pool para lidar com tarefas "custosas".
 Isso inclui I/O para quais um sistem operacional não fornece uma versão não-bloqueante, bem como tarefas particularmente intensivas em CPU.
 
-Estas são os módulos de APIs do Node que fazem uso desse Worker Pool:
+Estas são os módulos de APIs do Node que fazem uso dessa Worker Pool:
 
 1. I/O intensivo
     1. [DNS](https://nodejs.org/api/dns.html): `dns.lookup()`, `dns.lookupService()`.
@@ -63,14 +63,14 @@ Estas são os módulos de APIs do Node que fazem uso desse Worker Pool:
     1. [Crypto](https://nodejs.org/api/crypto.html): `crypto.pbkdf2()`, `crypto.scrypt()`, `crypto.randomBytes()`, `crypto.randomFill()`, `crypto.generateKeyPair()`.
     2. [Zlib](https://nodejs.org/api/zlib.html#zlib_threadpool_usage): Todas APIs do zlib exceto aquelas que são explicitamente síncronas usam a threadpool da libuv.
 
-Em muitas aplicações Node, essas APIs são as únicas fontes de tarefas para o Worker Pool. Aplicações e módulos que usam um [C++ add-on](https://nodejs.org/api/addons.html) podem enviar tarefas para o Worker Pool.
+Em muitas aplicações Node, essas APIs são as únicas fontes de tarefas para a Worker Pool. Aplicações e módulos que usam um [C++ add-on](https://nodejs.org/api/addons.html) podem enviar tarefas para a Worker Pool.
 
 Para cobrir todos os aspectos, observamos que quando você chama uma dessas APIs a partir de um callback no Event Loop, o Event Loop paga alguns custos menores de configuração, pois entra nas ligações do Node C++ para essa API e envia uma tarefa para ao Worker Pool.
 Esses custos são insignificantes em comparação ao custo total da tarefa, e é por isso que o Event Loop está sendo menos usado.
-Ao enviar uma dessas tarefas para o Worker Pool, o Node fornece um ponteiro para a função C++ correspondente nas ligações Node C++.
+Ao enviar uma dessas tarefas para a Worker Pool, o Node fornece um ponteiro para a função C++ correspondente nas ligações Node C++.
 
 ### Como o Node decide qual código executar a seguir?
-De forma abstrata, o Event Loop e o Worker Pool mantêm filas para eventos e tarefas pendentes, respectivamente.
+De forma abstrata, o Event Loop e a Worker Pool mantêm filas para eventos e tarefas pendentes, respectivamente.
 
 Na verdade, o Event Loop não mantém realmente uma fila.
 Em vez disso, ele possui uma coleção de descritores de arquivos que solicita ao sistema operacional para monitorar, usando um mecanismo como [epoll](http://man7.org/linux/man-pages/man7/epoll.7.html) (Linux), [kqueue](https://developer.apple.com/library/content/documentation/Darwin/Conceptual/FSEvents_ProgGuide/KernelQueues/KernelQueues.html) (OSX), event ports (Solaris), ou [IOCP](https://msdn.microsoft.com/en-us/library/windows/desktop/aa365198.aspx) (Windows).
@@ -78,7 +78,7 @@ Esses descritores de arquivos correspondem aos sockets de rede, aos arquivos que
 Quando o sistema operacional diz que um desses descritores de arquivos está pronto, o Evente Loop o converte para o evento apropriado e chama os callbacks associados com esse evento.
 Você pode aprender mais sobre esse processo [aqui](https://www.youtube.com/watch?v=P9csgxBgaZ8).
 
-Por outro lado, o Worker Pool usa uma fila real cujas entradas são tarefas a serem processadas.
+Por outro lado, a Worker Pool usa uma fila real cujas entradas são tarefas a serem processadas.
 Um Worker abre uma tarefa nesse fila e trabalha nela, e quando concluída, o Worker gera um evento "Pelo menos uma tarefa está concluída" para o Event Loop.
 
 ### O que isso significa para o design da aplicação?
@@ -90,9 +90,8 @@ Como o Node lida com muitos clientes com poucas threads, se uma thread bloqueia 
 *O tratamento justo dos clientes é, portanto, de responsabilidade de sua applicação*.
 Isso significa que você não deve fazer muito trabalho para nenhum cliente em uma única tarefa ou callback.
 
-This is part of why Node can scale well, but it also means that you are responsible for ensuring fair scheduling.
-Isso faz parte do motivo pelo qual
-The next sections talk about how to ensure fair scheduling for the Event Loop and for the Worker Pool.
+Isso faz parte do motivo pelo qual o Node escalar bem, mas também significa que você é responsável por garantir um scheduling justo.
+As próximas seções falam sobre como garantir um agendamento justo para o Loop de Eventos e para a Worker Pool.
 
 ## Não bloqueia o Event Loop
 O Event Loop percebe cada nova conexão do cliente e orquestra a geração de uma resposta.
@@ -371,7 +370,7 @@ Portanto, *as tarefas intensivas em I/O farão progressos mesmo enquanto a threa
 Os provedores de serviços externos, como bancos de dados e sistemas de arquivos, foram altamente otimizados para lidar com muitas requisições pendentes simultaneamente.
 Por exemplo, um sistema de arquivos examinará um grande conjunto de requisições de gravação e leitura pendentes para mesclar atualizações conflitantes e recuperar arquivos em uma ordem ideal (por exemplo, consulte [estes slides](http://researcher.ibm.com/researcher/files/il-AVISHAY/01-block_io-v1.3.pdf)).
 
-Se você confiar em apenas uma Worker Pool, por exemplo, o Node Worker Pool, as diferentes características do trabalho vinculado à CPU e vinculado à I/O podem prejudicar o desempenho da aplicação.
+Se você confiar em apenas uma Worker Pool, por exemplo, a Worker Pool do Node, as diferentes características do trabalho vinculado à CPU e vinculado à I/O podem prejudicar o desempenho da aplicação.
 
 Por esse motivo, convém manter uma Computation Worker Pool separada.
 
@@ -418,64 +417,64 @@ Para todos os propósitos práticos, `/dev/random` é infinitamente lento, e tod
 Um atacante envia requisições `k`, uma para cada Work, e nenhuma outra requisição de cliente que use a Worker Pool fará progresso.
 
 #### Exemplo de variação: operações de criptografia de longa execução
-Suppose your server generates cryptographically secure random bytes using [`crypto.randomBytes()`](https://nodejs.org/api/crypto.html#crypto_crypto_randombytes_size_callback).
-`crypto.randomBytes()` is not partitioned: it creates a single `randomBytes()` Task to generate as many bytes as you requested.
-If you create fewer bytes for some users and more bytes for others, `crypto.randomBytes()` is another source of variation in Task lengths.
+Suponha que seu servidor gere bytes aleatórios criptograficamente seguros usando [`crypto.randomBytes()`](https://nodejs.org/api/crypto.html#crypto_crypto_randombytes_size_callback).
+O `crypto.randomBytes()` não é particionado: ele cria uma única Task `randomBytes()` para gerar quantos bytes você solicitou.
+Se você criar menos bytes para alguns usuários e mais bytes para outros, `crypto.randomBytes()` é outra fonte de variação no tamanho das Tasks.
 
-### Task partitioning
-Tasks with variable time costs can harm the throughput of the Worker Pool.
-To minimize variation in Task times, as far as possible you should *partition* each Task into comparable-cost sub-Tasks.
-When each sub-Task completes it should submit the next sub-Task, and when the final sub-Task completes it should notify the submitter.
+### Particionamento de Task
+Tasks com custos variáveis de tempo podem prejudicar a taxa de transferência da Worker Pool.
+Para minimizar a variação no tempo das Tasks, na medida do possível, você deve *particionar* cada Task em sub-Tasks com custo comparável.
+Quando cada sub-Task for concluída, ela deverá enviar a próxima sub-Task e, quando a sub-Task final for concluída, deverá notificar o remetente.
 
-To continue the `fs.readFile()` example, you should instead use `fs.read()` (manual partitioning) or `ReadStream` (automatically partitioned).
+Para continuar o exemplo de `fs.readFile()`, você deve usar `fs.read()` (particionamento manual) ou `ReadStream` (particionado automaticamente).
 
-The same principle applies to CPU-bound tasks; the `asyncAvg` example might be inappropriate for the Event Loop, but it is well suited to the Worker Pool.
+O mesmo princípio se aplica às tarefas ligadas à CPU; o exemplo `asyncAvg` pode ser inadequado para o Event Loop, mas é adequado para a Worker Pool.
 
-When you partition a Task into sub-Tasks, shorter Tasks expand into a small number of sub-Tasks, and longer Tasks expand into a larger number of sub-Tasks.
-Between each sub-Task of a longer Task, the Worker to which it was assigned can work on a sub-Task from another, shorter, Task, thus improving the overall Task throughput of the Worker Pool.
+Quando você particiona uma Task em sub-Tasks, as Tasks mais curtas se expandam para um pequeno número de sub-Tasks, e as Tasks mais longas se expandem para um número maior de sub-Tasks.
+Entre cada sub-Task de uma Task mais longa, o Worker ao qual foi designado pode trabalhar em uma sub-Task de outra Task mais curta, melhorando assim o rendimento geral da Task da Worker Pool.
 
-Note that the number of sub-Tasks completed is not a useful metric for the throughput of the Worker Pool.
-Instead, concern yourself with the number of *Tasks* completed.
+Observe que o número de sub-Tasks concluídas não é uma métrica útil para a taxa de transferência da Worker Pool.
+Em vez disso, preocupe-se com o número de *Tasks* concluídas.
 
-### Avoiding Task partitioning
-Recall that the purpose of Task partitioning is to minimize the variation in Task times.
-If you can distinguish between shorter Tasks and longer Tasks (e.g. summing an array vs. sorting an array), you could create one Worker Pool for each class of Task.
-Routing shorter Tasks and longer Tasks to separate Worker Pools is another way to minimize Task time variation.
+### Evitando o particionamento de Tasks
+Lembre-se de que o objetivo do particionamento de Tasks é minimizar a variação no tempo das Tasks.
+Se você conseguir distinguir entre Tasks mais curtas e Tasks mais longas (por exemplo, somar um array versus ordenar um array), poderá criar uma Worker Pool para cada classe de Task.
+O roteamento de Tasks mais curtas e tarefas mais longas para separar na Worker Pool é outra maneira de minimizar a variação do tempo da Task.
 
-In favor of this approach, partitioning Tasks incurs overhead (the costs of creating a Worker Pool Task representation and of manipulating the Worker Pool queue), and avoiding partitioning saves you the costs of additional trips to the Worker Pool.
-It also keeps you from making mistakes in partitioning your Tasks.
+Em favor dessa abordagem, o particionamento de Tasks incorre em sobrecarga (os custos de criação de uma representação de Task da Worker Pool e de manipulação de fila da Worker Pool) e evitar o particionamento economiza os custos de passagens adicionais na Worker Pool.
+Também evita que você cometa erros ao particionar suas Tasks.
 
-The downside of this approach is that Workers in all of these Worker Pools will incur space and time overheads and will compete with each other for CPU time.
-Remember that each CPU-bound Task makes progress only while it is scheduled.
-As a result, you should only consider this approach after careful analysis.
+A desvantagem dessa abordagem é que os Workers em todas essas Worker Pools sofrerão sobrecarga de espaço e tempo e competirão entre si pelo tempo de CPU.
+Lembre-se de que cada Task vinculada à CPU só progride enquanto está agendada.
+Como resultado, você só deve considerar essa abordagem após uma análise cuidadosa.
 
-### Worker Pool: conclusions
-Whether you use only the Node Worker Pool or maintain separate Worker Pool(s), you should optimize the Task throughput of your Pool(s).
+### Worker Pool: conclusões
+Se você usa apenas a Worker Pool do Node ou mantém Worker Pools separadas, você deve otimizar a taxa de transferência de Task dos seus Pool(s).
 
-To do this, minimize the variation in Task times by using Task partitioning.
+Para fazer isso, minimize a variação nos tempos da Task usando o particionamento de Tasks.
 
-## The risks of npm modules
-While the Node core modules offer building blocks for a wide variety of applications, sometimes something more is needed. Node developers benefit tremendously from the [npm ecosystem](https://www.npmjs.com/), with hundreds of thousands of modules offering functionality to accelerate your development process.
+## Os riscos dos módulos npm
+Enquanto os módulos principais do Node oferecem blocos de construção para uma ampla variedade de aplicações, às vezes é necessário algo mais. Os desenvolvedores de Node se beneficiam enormemente do [ecosistema npm](https://www.npmjs.com/), com centenas de milhares de módulos oferecendo funcionalidade para acelerar seu processo de desenvolvimento.
 
-Remember, however, that the majority of these modules are written by third-party developers and are generally released with only best-effort guarantees. A developer using an npm module should be concerned about two things, though the latter is frequently forgotten.
-1. Does it honor its APIs?
-2. Might its APIs block the Event Loop or a Worker?
-Many modules make no effort to indicate the cost of their APIs, to the detriment of the community.
+Lembre-se, no entanto, que a maioria desses módulos é escrita por desenvolvedores de terceiros e geralmente é liberada com apenas com o minímo necessário para funcionar. Um desenvolvedor que usa um módulo npm deve se preocupar com duas coisas, embora este último seja frequentemente esquecido.
+1. Honra suas APIs?
+2. Suas APIs podem bloquear o Event Loop ou um Worker?
+Muitos módulos não fazem nenhum esforço para indicar o custo de suas APIs, em detrimento da comunidade.
 
-For simple APIs you can estimate the cost of the APIs; the cost of string manipulation isn't hard to fathom.
-But in many cases it's unclear how much an API might cost.
+Para APIs simples, você pode estimar seus custo; o custo da manipulação de string não é difícil de entender.
+Mas, em muitos casos, não está claro quanto uma API pode custar.
 
-*If you are calling an API that might do something expensive, double-check the cost. Ask the developers to document it, or examine the source code yourself (and submit a PR documenting the cost).*
+*Se você está chamando uma API que pode fazer algo pesado, verifique o custo. Peça aos desenvolvedores para documentá-lo ou examine você mesmo o código-fonte (e envie um PR documentando o custo).*
 
-Remember, even if the API is asynchronous, you don't know how much time it might spend on a Worker or on the Event Loop in each of its partitions.
-For example, suppose in the `asyncAvg` example given above, each call to the helper function summed *half* of the numbers rather than one of them.
-Then this function would still be asynchronous, but the cost of each partition would be `O(n)`, not `O(1)`, making it much less safe to use for arbitrary values of `n`.
+Lembre-se, mesmo que a API seja assíncrona, você não sabe quanto tempo ela passará em um Worker ou no Event Loop em cada uma de suas partições.
+Por exemplo, suponha que no exemplo `asyncAvg` dado acima, cada chamada para a função auxiliar somasse *metade* dos números em vez de um deles.
+Então essa função ainda seria assíncrona, mas o custo de cada partição seria `O(n)`, não `O(1)`, tornando muito menos seguro o uso de valores arbitrários de `n`.
 
-## Conclusion
-Node has two types of threads: one Event Loop and `k` Workers.
-The Event Loop is responsible for JavaScript callbacks and non-blocking I/O, and a Worker executes tasks corresponding to C++ code that completes an asynchronous request, including blocking I/O and CPU-intensive work.
-Both types of threads work on no more than one activity at a time.
-If any callback or task takes a long time, the thread running it becomes *blocked*.
-If your application makes blocking callbacks or tasks, this can lead to degraded throughput (clients/second) at best, and complete denial of service at worst.
+## Conclusão
+O Node possui dois tipos de threads: um Event Loop e `k` Workers.
+O Event Loop é responsável por callbacks JavaScript e I/O não bloqueante, e um Worker executa tarefas correspondentes ao código C++ que conclui uma requisição assíncrona, incluindo o bloqueio de I/O e usos intensivos da CPU.
+Ambos os tipos de threads funcionam em não mais de uma atividade por vez.
+Se qualquer callback ou tarefa demorar muito, a thread em execução será *bloqueada*.
+Se o sua aplicacão efetuar callbacks ou tarefas bloqueantes, isso pode levar a uma taxa de transferência degradada (clientes/segundo) na melhor das hipóteses, e na negação de serviço completa na pior das hipóteses.
 
-To write a high-throughput, more DoS-proof web server, you must ensure that on benign and on malicious input, neither your Event Loop nor your Workers will block.
+Para escrever um servidor web com alta taxa de transferência, mais à prova de DoS, você deve garantir que nas entradas benignas e maliciosas, nem o Event Loop nem os Workers sejam bloqueados.
